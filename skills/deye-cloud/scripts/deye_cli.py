@@ -6,6 +6,7 @@ import json
 import os
 import sys
 import time
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from urllib.request import Request, urlopen
 
@@ -195,3 +196,50 @@ def get_session(env_path: str = None) -> tuple:
         print(f"📡 Using cached device SN: {device_sn}", file=sys.stderr)
 
     return base_url, headers, device_sn
+
+
+# ── Section 7: Output Formatting ───────────────────────
+_LOCAL_TZ = timezone(timedelta(hours=7))  # UTC+7
+
+
+def _format_timestamp(raw) -> str:
+    """Convert Unix timestamp to readable local time."""
+    try:
+        return datetime.fromtimestamp(int(raw), tz=_LOCAL_TZ).strftime('%Y-%m-%d %H:%M:%S')
+    except (ValueError, TypeError):
+        return str(raw)
+
+
+def _json_output(success: bool, command: str, device_sn: str,
+                 data=None, error=None, api_code=None, api_msg=None):
+    """Print structured JSON output."""
+    out = {
+        "success": success,
+        "command": command,
+        "device_sn": device_sn,
+        "timestamp": datetime.now(tz=_LOCAL_TZ).isoformat(),
+    }
+    if success:
+        out["data"] = data
+    else:
+        out["error"] = error
+        if api_code:
+            out["api_code"] = api_code
+        if api_msg:
+            out["api_msg"] = api_msg
+    print(json.dumps(out, indent=2, ensure_ascii=False))
+
+
+def _human_output(title: str, data: dict, indent: int = 0):
+    """Print human-readable formatted output."""
+    prefix = "  " * indent
+    print(f"\n{prefix}{'='*60}")
+    print(f"{prefix}  {title}")
+    print(f"{prefix}{'='*60}")
+    for key, val in data.items():
+        if isinstance(val, dict):
+            print(f"{prefix}  {key}:")
+            for k2, v2 in val.items():
+                print(f"{prefix}    {k2}: {v2}")
+        else:
+            print(f"{prefix}  {key}: {val}")
