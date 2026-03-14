@@ -5,9 +5,60 @@ description: Monitor, configure, and control Deye Hybrid Inverters via the DeyeC
 
 # Deye Cloud Skill
 
-Manage Deye Hybrid Inverters through natural language. This skill provides 29 CLI subcommands covering monitoring, configuration reading, and control operations.
+Manage Deye Hybrid Inverters through natural language. Supports two modes:
 
-## First-Run Setup
+## Mode Detection
+
+- **MCP Mode** (Claude Desktop, Cursor, Cline): If `deye_status`, `deye_history`, etc. tools are available → use them directly.
+- **CLI Mode** (Antigravity, Claude Code): If MCP tools are NOT available → use `python3 skills/deye-cloud/scripts/deye_cli.py --json <command>`.
+
+---
+
+## MCP Mode — Tool Reference
+
+When MCP tools are available, use these 7 tools directly:
+
+### `deye_status`
+Get current inverter status (PV, battery SOC, grid, consumption). No parameters needed.
+
+### `deye_history`
+Get historical energy data.
+- `granularity`: `"intraday"`, `"daily"`, or `"monthly"`
+- `start_date`: `YYYY-MM-DD` (intraday/daily) or `YYYY-MM` (monthly)
+- `end_date`: same format as start_date
+- `measure_points` (optional): comma-separated keys, e.g. `"SOC,BatV,GridW"`
+- `station_id` (optional): for station-level history
+- `raw` (optional): `true` for raw API response
+
+### `deye_devices`
+List devices, stations, or measure points.
+- `command`: `"list_devices"` (default), `"list_stations"`, `"station_info"`, or `"measure_points"`
+- `station_id` (optional): required for `station_info`
+
+### `deye_alerts`
+Get device or station alerts.
+- `station_id` (optional): for station-level alerts
+
+### `deye_config`
+Read inverter configuration.
+- `section`: `"battery"`, `"system"`, `"tou"`, or `"all"` (default, reads all dynamic params)
+
+### `deye_control`
+Execute a control command (WRITE operation). ⚠️ **Safety: always call with `confirmed=false` first.**
+- `action`: e.g. `"set_solar_sell"`, `"set_work_mode"`, `"set_battery_param"`, etc.
+- `params`: action-specific dict
+- `confirmed`: `false` to preview changes, `true` to execute after user confirms
+
+### `deye_setup`
+Check credentials or track order status.
+- `command`: `"check"` (default) or `"order_status"`
+- `order_id`: required when command is `"order_status"`
+
+---
+
+## CLI Mode — Command Reference
+
+### First-Run Setup
 
 If credentials are not configured yet:
 
@@ -24,8 +75,6 @@ Then guide the user to edit `~/.deye/.env` with their Deye Cloud developer crede
 - `DEYE_COMPANY_ID` — Company ID (default: `0`)
 
 After setup, all subsequent commands auto-authenticate and cache the token.
-
-## Command Reference
 
 ### 🟢 Monitor (read-only)
 
@@ -70,7 +119,7 @@ After setup, all subsequent commands auto-authenticate and cache the token.
 | `set-limit-control --type TYPE` | User wants to change limit control function |
 | `dynamic-control --params JSON` | User wants to set multiple parameters at once |
 
-## Running Commands
+### Running Commands
 
 Always use `--json` flag for structured output:
 
