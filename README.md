@@ -1,6 +1,6 @@
 # deyecloud-cli
 
-CLI and AI Skill for managing Deye Hybrid Inverters via the [DeyeCloud Developer API](https://developer.deyecloud.com). Provides **29 subcommands** covering real-time monitoring, configuration reading, and remote control — zero external Python dependencies.
+CLI, MCP Server, and AI Skill for managing Deye Hybrid Inverters via the [DeyeCloud Developer API](https://developer.deyecloud.com). Provides **29 CLI subcommands** and **7 MCP tools** covering real-time monitoring, configuration reading, and remote control.
 
 ## Features
 
@@ -9,12 +9,14 @@ CLI and AI Skill for managing Deye Hybrid Inverters via the [DeyeCloud Developer
 - 🔧 **Control** — Change work mode, battery parameters, power limits, TOU, smart load, and more
 - 🤖 **AI-Native** — Built as an [Antigravity](https://github.com/google-deepmind/antigravity) / Claude Code skill with structured JSON output
 - 🔒 **Safety Protocol** — Mandatory read-before-write, comparison table, and user confirmation for all control operations
-- 📦 **Zero Dependencies** — Uses only Python stdlib (`urllib.request`, `hashlib`, `json`, `argparse`)
+- 🔌 **MCP Server** — 7 grouped tools for [Claude Desktop](https://claude.ai/download), Cursor, Cline, and other MCP clients
+- 📦 **Minimal Dependencies** — CLI uses only Python stdlib; MCP server adds only `fastmcp`
 
 ## Prerequisites
 
 1. **Python 3.8+**
 2. **Deye Cloud Developer Account** — Register at [developer.deyecloud.com](https://developer.deyecloud.com) to get your `App ID` and `App Secret`
+3. **For MCP Server:** `pip install fastmcp` (not needed for CLI-only usage)
 
 ---
 
@@ -132,13 +134,15 @@ This project is designed as an **AI coding agent skill** — an instruction set 
 ### How It Works
 
 ```
-You ──(natural language)──> AI Agent ──(reads SKILL.md)──> run_command
-                                                              │
-                                                    python3 deye_cli.py <cmd> --json
-                                                              │
-                                                        Deye Cloud API
-                                                              │
-You <──(formatted response)── AI Agent <──(parse JSON)────────┘
+                          ┌─── CLI Mode (Antigravity, Claude Code) ───┐
+You ──> AI Agent ──> SKILL.md ──> python3 deye_cli.py --json <cmd>
+                          │                                           │
+                          └─── MCP Mode (Claude Desktop, Cursor) ────┘
+                                    deye_mcp.py (7 tools)
+                                           │
+                              ┌─── deye_core.py (shared logic) ───┐
+                              │                                    │
+                              └──────── Deye Cloud API ───────────┘
 ```
 
 Ask your AI agent things like:
@@ -161,6 +165,25 @@ The `SKILL.md` instructs the AI agent to follow a mandatory 6-step safety protoc
 ---
 
 ## Deployment
+
+### Deploy to Claude Desktop (MCP)
+
+Add to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "deye-cloud": {
+      "command": "python",
+      "args": ["path/to/skills/deye-cloud/scripts/deye_mcp.py"]
+    }
+  }
+}
+```
+
+Make sure `fastmcp` is installed: `pip install fastmcp`
+
+The MCP server exposes 7 tools (`deye_status`, `deye_history`, `deye_devices`, `deye_alerts`, `deye_config`, `deye_control`, `deye_setup`) that Claude Desktop can call directly.
 
 ### Deploy to Antigravity
 
@@ -203,15 +226,18 @@ The CLI works standalone. Any agent that can execute shell commands can use it:
 ```
 deyecloud-cli/
 ├── skills/deye-cloud/
-│   ├── SKILL.md                  # AI agent instructions
+│   ├── SKILL.md                  # AI agent instructions (CLI + MCP)
 │   ├── scripts/
-│   │   └── deye_cli.py           # Single-file CLI (29 subcommands, ~980 lines)
+│   │   ├── deye_core.py          # Shared business logic (returns dicts)
+│   │   ├── deye_cli.py           # CLI wrapper (argparse, 29 subcommands)
+│   │   └── deye_mcp.py           # MCP server (FastMCP, 7 grouped tools)
 │   └── references/
 │       ├── api-overview.md       # Base URLs, auth flow, response format
 │       ├── monitoring.md         # Measure point codes, history granularity
 │       ├── configuration.md      # Battery params, work modes, TOU structure
 │       └── control.md            # Enum values, order flow, safety warnings
-├── tests/                        # pytest unit tests (20 tests)
+├── tests/                        # pytest unit tests (42 tests)
+├── requirements.txt              # fastmcp dependency (MCP server only)
 ├── samples/                      # Reference Python scripts from Deye API docs
 └── docs/plans/                   # Design and implementation plan documents
 ```
@@ -219,7 +245,7 @@ deyecloud-cli/
 ## Running Tests
 
 ```bash
-pip install pytest
+pip install pytest fastmcp
 python -m pytest tests/ -v
 ```
 
