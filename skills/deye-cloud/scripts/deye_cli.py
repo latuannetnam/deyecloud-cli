@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Deye Cloud CLI — Zero-dependency inverter management."""
 
+import json
 import os
 from pathlib import Path
+from urllib.request import Request, urlopen
 
 # ── Section 1: .env Parser ─────────────────────────────
 _DEFAULT_ENV_PATH = os.path.join(Path.home(), '.deye', '.env')
@@ -56,3 +58,23 @@ def _save_env(path: str, updates: dict) -> None:
 
     with open(path, 'w', encoding='utf-8') as fh:
         fh.write('\n'.join(lines) + '\n')
+
+
+# ── Section 2: HTTP Client ─────────────────────────────
+_TIMEOUT = 15
+
+
+def _http_post(url: str, payload: dict, headers: dict) -> dict:
+    """POST JSON, return parsed response dict."""
+    data = json.dumps(payload).encode('utf-8')
+    hdrs = {**headers, 'Content-Type': 'application/json'}
+    req = Request(url, data=data, headers=hdrs, method='POST')
+    with urlopen(req, timeout=_TIMEOUT) as resp:
+        return json.loads(resp.read())
+
+
+def _http_get(url: str, headers: dict) -> dict:
+    """GET request, return parsed response dict."""
+    req = Request(url, headers=headers, method='GET')
+    with urlopen(req, timeout=_TIMEOUT) as resp:
+        return json.loads(resp.read())
