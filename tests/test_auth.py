@@ -8,20 +8,20 @@ from unittest.mock import patch, MagicMock
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'skills', 'deye-cloud', 'scripts'))
-from deye_cli import _hash_password, _obtain_token, _discover_device, get_session
+from deye_core import hash_password, obtain_token, discover_device, get_session
 
 
 class TestHashPassword:
     def test_sha256(self):
-        result = _hash_password("test123")
+        result = hash_password("test123")
         assert result == hashlib.sha256(b"test123").hexdigest()
 
 
 class TestObtainToken:
-    @patch('deye_cli._http_post')
+    @patch('deye_core.http_post')
     def test_calls_token_endpoint(self, mock_post):
         mock_post.return_value = {"success": True, "accessToken": "tok", "expiresIn": 86400}
-        result = _obtain_token("http://base", "appid", "secret", "e@m", "pass", "0")
+        result = obtain_token("http://base", "appid", "secret", "e@m", "pass", "0")
         mock_post.assert_called_once()
         call_url = mock_post.call_args[0][0]
         assert "/account/token?appId=appid" in call_url

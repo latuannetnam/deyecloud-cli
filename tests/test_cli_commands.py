@@ -24,8 +24,8 @@ class TestSetup:
 
 
 class TestStatus:
-    @patch('deye_cli._http_post')
-    @patch('deye_cli.get_session')
+    @patch('deye_core.http_post')
+    @patch('deye_core.get_session')
     def test_status_json_output(self, mock_session, mock_post):
         from deye_cli import cmd_status
         mock_session.return_value = ("http://base", {"Authorization": "bearer tok"}, "SN123")
@@ -60,8 +60,8 @@ class TestStatus:
 
 
 class TestDevices:
-    @patch('deye_cli._http_post')
-    @patch('deye_cli.get_session')
+    @patch('deye_core.http_post')
+    @patch('deye_core.get_session')
     def test_devices_json_output(self, mock_session, mock_post):
         from deye_cli import cmd_devices
         mock_session.return_value = ("http://base", {"Authorization": "bearer tok"}, "SN123")
@@ -88,8 +88,8 @@ class TestDevices:
 
 
 class TestHistory:
-    @patch('deye_cli._http_post')
-    @patch('deye_cli.get_session')
+    @patch('deye_core.http_post')
+    @patch('deye_core.get_session')
     def test_history_json_output(self, mock_session, mock_post):
         from deye_cli import cmd_history
         mock_session.return_value = ("http://base", {"Authorization": "bearer tok"}, "SN123")
