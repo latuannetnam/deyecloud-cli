@@ -243,3 +243,104 @@ def _human_output(title: str, data: dict, indent: int = 0):
                 print(f"{prefix}    {k2}: {v2}")
         else:
             print(f"{prefix}  {key}: {val}")
+
+
+# ── Section 8: CLI Entry Point ─────────────────────────
+import argparse
+
+_ENV_TEMPLATE = """\
+# Deye Cloud credentials
+DEYE_BASE_URL=https://api.deye.com.cn/v1
+DEYE_APP_ID=
+DEYE_APP_SECRET=
+DEYE_EMAIL=
+DEYE_PASSWORD=
+DEYE_COMPANY_ID=0
+
+# Auto-cached (do not edit manually)
+# DEYE_TOKEN=
+# DEYE_TOKEN_EXPIRES_AT=
+# DEYE_DEVICE_SN=
+"""
+
+
+def cmd_setup(args):
+    """Create or validate ~/.deye/.env credentials file."""
+    env_path = args.env_path
+    env = _load_env(env_path)
+
+    if env.get('DEYE_APP_ID') and env.get('DEYE_EMAIL'):
+        if args.json:
+            _json_output(True, "setup", "", data={
+                "status": "already_configured",
+                "env_path": env_path,
+                "keys_found": list(env.keys()),
+            })
+        else:
+            _human_output("Setup", {
+                "Status": "Already configured",
+                "Env path": env_path,
+                "Keys found": ", ".join(env.keys()),
+            })
+        return
+
+    # Create template
+    os.makedirs(os.path.dirname(env_path), exist_ok=True)
+    with open(env_path, 'w', encoding='utf-8') as fh:
+        fh.write(_ENV_TEMPLATE)
+
+    if args.json:
+        _json_output(True, "setup", "", data={
+            "status": "template_created",
+            "env_path": env_path,
+            "message": "Edit the .env file with your Deye Cloud credentials.",
+        })
+    else:
+        _human_output("Setup", {
+            "Status": "Template created",
+            "Env path": env_path,
+            "Next step": "Edit the .env file with your Deye Cloud credentials.",
+        })
+
+
+def _build_parser():
+    """Build the argparse parser with all subcommands."""
+    parser = argparse.ArgumentParser(
+        prog='deye_cli',
+        description='Deye Cloud CLI — Zero-dependency inverter management.',
+    )
+    parser.add_argument('--json', action='store_true', help='Output in JSON format')
+    parser.add_argument('--device-sn', default=None, help='Override device serial number')
+    parser.add_argument('--env-path', default=_DEFAULT_ENV_PATH, help='Path to .env file')
+
+    subs = parser.add_subparsers(dest='command', help='Available commands')
+
+    # setup
+    subs.add_parser('setup', help='Create or validate credentials file')
+
+    return parser, subs
+
+
+def main():
+    """CLI entry point."""
+    parser, subs = _build_parser()
+    args = parser.parse_args()
+
+    if not args.command:
+        parser.print_help()
+        sys.exit(1)
+
+    commands = {
+        'setup': cmd_setup,
+    }
+
+    cmd_func = commands.get(args.command)
+    if cmd_func:
+        cmd_func(args)
+    else:
+        parser.print_help()
+        sys.exit(1)
+
+
+if __name__ == '__main__':
+    main()
