@@ -520,6 +520,115 @@ def cmd_order_status(args):
             print(f"Error: {result.get('msg')}")
 
 
+# ── Section 6: Station Commands ───────────────────────
+
+def cmd_station_list(args):
+    """List all stations on the account."""
+    base_url, headers, device_sn = _get_device_sn(args)
+    result = _http_post(f"{base_url}/station/list",
+                        {"page": 1, "size": 100}, headers)
+    if not result.get('success'):
+        if args.json:
+            _json_output(False, "station-list", device_sn,
+                        error=result.get('msg'), api_code=result.get('code'))
+        else:
+            print(f"Error: {result.get('msg')}")
+        return
+
+    stations = result.get('stationList', [])
+    if args.json:
+        _json_output(True, "station-list", device_sn, data={
+            "count": len(stations),
+            "stations": stations,
+        })
+    else:
+        _human_output(f"Stations ({len(stations)} total)", {
+            s.get('name', f"Station {s.get('id', '?')}"): f"ID={s.get('id')}"
+            for s in stations
+        })
+
+
+def cmd_station_info(args):
+    """Get detailed info about a station."""
+    base_url, headers, device_sn = _get_device_sn(args)
+    result = _http_post(f"{base_url}/station/info",
+                        {"stationId": args.station_id}, headers)
+    if not result.get('success'):
+        if args.json:
+            _json_output(False, "station-info", device_sn,
+                        error=result.get('msg'), api_code=result.get('code'))
+        else:
+            print(f"Error: {result.get('msg')}")
+        return
+
+    if args.json:
+        _json_output(True, "station-info", device_sn, data=result)
+    else:
+        info = {k: v for k, v in result.items() if k not in ('success', 'code', 'msg')}
+        _human_output(f"Station Info — {args.station_id}", info)
+
+
+def cmd_station_history(args):
+    """Fetch station-level history data."""
+    base_url, headers, device_sn = _get_device_sn(args)
+    result = _http_post(f"{base_url}/station/history", {
+        "stationId": args.station_id,
+        "granularity": args.granularity,
+        "startAt": args.start,
+        "endAt": args.end,
+    }, headers)
+    if not result.get('success'):
+        if args.json:
+            _json_output(False, "station-history", device_sn,
+                        error=result.get('msg'), api_code=result.get('code'))
+        else:
+            print(f"Error: {result.get('msg')}")
+        return
+
+    records = result.get('dataList', [])
+    if args.json:
+        _json_output(True, "station-history", device_sn, data={
+            "stationId": args.station_id,
+            "count": len(records),
+            "records": records,
+        })
+    else:
+        _human_output(f"Station History — {args.station_id}", {
+            "Period": f"{args.start} to {args.end}",
+            "Records": len(records),
+        })
+
+
+def cmd_station_alerts(args):
+    """Fetch station-level alerts."""
+    base_url, headers, device_sn = _get_device_sn(args)
+    result = _http_post(f"{base_url}/station/alert/list", {
+        "stationId": args.station_id,
+        "page": 1,
+        "size": 50,
+    }, headers)
+    if not result.get('success'):
+        if args.json:
+            _json_output(False, "station-alerts", device_sn,
+                        error=result.get('msg'), api_code=result.get('code'))
+        else:
+            print(f"Error: {result.get('msg')}")
+        return
+
+    alerts = result.get('alertList', [])
+    if args.json:
+        _json_output(True, "station-alerts", device_sn, data={
+            "stationId": args.station_id,
+            "count": len(alerts),
+            "alerts": alerts,
+        })
+    else:
+        _human_output(f"Station Alerts — {args.station_id}", {"Count": len(alerts)})
+        for alert in alerts:
+            print(f"  [{alert.get('alertLevel', '?')}] {alert.get('alertMsg', '')} "
+                  f"({_format_timestamp(alert.get('alertTime', ''))})")
+
+
 def _build_parser():
     """Build the argparse parser with all subcommands."""
     parser = argparse.ArgumentParser(
@@ -559,6 +668,21 @@ def _build_parser():
     p_order = subs.add_parser('order-status', help='Check control order status')
     p_order.add_argument('--order-id', required=True, help='Order ID to check')
 
+    # station commands
+    subs.add_parser('station-list', help='List all stations')
+
+    p_sinfo = subs.add_parser('station-info', help='Get station details')
+    p_sinfo.add_argument('--station-id', type=int, required=True, help='Station ID')
+
+    p_shist = subs.add_parser('station-history', help='Fetch station history')
+    p_shist.add_argument('--station-id', type=int, required=True, help='Station ID')
+    p_shist.add_argument('--granularity', type=int, default=2)
+    p_shist.add_argument('--start', required=True)
+    p_shist.add_argument('--end', required=True)
+
+    p_salert = subs.add_parser('station-alerts', help='Fetch station alerts')
+    p_salert.add_argument('--station-id', type=int, required=True, help='Station ID')
+
     return parser, subs
 
 
@@ -580,6 +704,10 @@ def main():
         'history-raw': cmd_history_raw,
         'alerts': cmd_alerts,
         'order-status': cmd_order_status,
+        'station-list': cmd_station_list,
+        'station-info': cmd_station_info,
+        'station-history': cmd_station_history,
+        'station-alerts': cmd_station_alerts,
     }
 
     cmd_func = commands.get(args.command)
