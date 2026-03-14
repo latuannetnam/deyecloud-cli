@@ -629,6 +629,200 @@ def cmd_station_alerts(args):
                   f"({_format_timestamp(alert.get('alertTime', ''))})")
 
 
+# ── Config Commands (read-only settings) ───────────────
+
+def _simple_config_cmd(args, endpoint: str, command_name: str, payload_extra: dict = None):
+    """Generic handler for config read commands."""
+    base_url, headers, device_sn = _get_device_sn(args)
+    payload = {"deviceSn": device_sn}
+    if payload_extra:
+        payload.update(payload_extra)
+    result = _http_post(f"{base_url}{endpoint}", payload, headers)
+    if not result.get('success'):
+        if args.json:
+            _json_output(False, command_name, device_sn,
+                        error=result.get('msg'), api_code=result.get('code'))
+        else:
+            print(f"Error: {result.get('msg')}")
+        return
+    data = {k: v for k, v in result.items() if k not in ('success', 'code', 'msg', 'requestId')}
+    if args.json:
+        _json_output(True, command_name, device_sn, data=data)
+    else:
+        _human_output(f"{command_name} — {device_sn}", data)
+
+
+def cmd_config_battery(args):
+    """Read battery configuration."""
+    _simple_config_cmd(args, "/config/battery", "config-battery")
+
+
+def cmd_config_system(args):
+    """Read system work mode configuration."""
+    _simple_config_cmd(args, "/config/system", "config-system")
+
+
+def cmd_config_tou(args):
+    """Read Time-of-Use schedule configuration."""
+    _simple_config_cmd(args, "/config/tou", "config-tou")
+
+
+def cmd_dynamic_read(args):
+    """Read all dynamic control parameters (two-step: send read → poll result)."""
+    base_url, headers, device_sn = _get_device_sn(args)
+
+    # Step 1: Send read request
+    read_result = _http_post(f"{base_url}/strategy/dynamicControl/read",
+                              {"deviceSn": device_sn}, headers)
+    if not read_result.get('success'):
+        if args.json:
+            _json_output(False, "dynamic-read", device_sn,
+                        error=read_result.get('msg'), api_code=read_result.get('code'))
+        else:
+            print(f"Error sending read request: {read_result.get('msg')}")
+        return
+
+    # Step 2: Poll for result (retry up to 5 times with 2-second delay)
+    import time as _time
+    for attempt in range(5):
+        _time.sleep(2)
+        result = _http_post(f"{base_url}/strategy/dynamicControl/readResult",
+                            {"deviceSn": device_sn}, headers)
+        if result.get('success') and result.get('data'):
+            data = result.get('data', result)
+            if args.json:
+                _json_output(True, "dynamic-read", device_sn, data=data)
+            else:
+                _human_output(f"Dynamic Control Parameters — {device_sn}", data if isinstance(data, dict) else {"data": data})
+            return
+
+    # Timeout
+    if args.json:
+        _json_output(False, "dynamic-read", device_sn,
+                    error="Timeout waiting for dynamic read result after 10 seconds")
+    else:
+        print("Error: Timeout waiting for dynamic read result after 10 seconds")
+
+
+# ── Control Commands (write operations) ────────────────
+
+def _control_cmd(args, endpoint: str, command_name: str, payload: dict):
+    """Generic handler for control commands that return an orderId."""
+    base_url, headers, device_sn = _get_device_sn(args)
+    payload["deviceSn"] = device_sn
+    result = _http_post(f"{base_url}{endpoint}", payload, headers)
+    if result.get('success'):
+        order_id = result.get('orderId', result.get('data', {}).get('orderId', 'N/A') if isinstance(result.get('data'), dict) else 'N/A')
+        if args.json:
+            _json_output(True, command_name, device_sn, data={
+                "orderId": order_id,
+                "message": f"Command sent. Track with: deye_cli.py order-status --order-id {order_id}",
+            })
+        else:
+            _human_output(f"{command_name} — Sent", {
+                "Order ID": order_id,
+                "Track": f"deye_cli.py order-status --order-id {order_id}",
+            })
+    else:
+        if args.json:
+            _json_output(False, command_name, device_sn,
+                        error=result.get('msg'), api_code=result.get('code'))
+        else:
+            print(f"Error: {result.get('msg')}")
+
+
+def cmd_set_work_mode(args):
+    """Set system work mode."""
+    _control_cmd(args, "/order/sys/workMode/update", "set-work-mode",
+                 {"workMode": args.mode})
+
+
+def cmd_set_solar_sell(args):
+    """Enable/disable solar sell."""
+    _control_cmd(args, "/order/sys/solarSell/control", "set-solar-sell",
+                 {"solarSell": 1 if args.action == "on" else 0})
+
+
+def cmd_set_battery_param(args):
+    """Set battery parameter."""
+    _control_cmd(args, "/order/battery/parameter/update", "set-battery-param",
+                 {"paramName": args.param, "paramValue": args.value})
+
+
+def cmd_set_battery_mode(args):
+    """Enable/disable battery charge mode."""
+    _control_cmd(args, "/order/battery/modeControl", "set-battery-mode",
+                 {"chargeMode": args.mode, "action": 1 if args.action == "on" else 0})
+
+
+def cmd_set_battery_type(args):
+    """Set battery type."""
+    _control_cmd(args, "/order/battery/type/update", "set-battery-type",
+                 {"batteryType": args.type})
+
+
+def cmd_set_tou(args):
+    """Set TOU schedule."""
+    settings = json.loads(args.settings)
+    _control_cmd(args, "/order/sys/tou/update", "set-tou",
+                 {"touSettings": settings})
+
+
+def cmd_set_tou_switch(args):
+    """Enable/disable TOU."""
+    days = [d.strip() for d in args.days.split(',')] if args.days else []
+    _control_cmd(args, "/order/sys/tou/switch", "set-tou-switch",
+                 {"touSwitch": 1 if args.action == "on" else 0, "days": days})
+
+
+def cmd_set_energy_pattern(args):
+    """Set energy priority pattern."""
+    _control_cmd(args, "/order/sys/energyPattern/update", "set-energy-pattern",
+                 {"energyPattern": args.pattern})
+
+
+def cmd_set_power(args):
+    """Set power limits."""
+    _control_cmd(args, "/order/sys/power/update", "set-power",
+                 {"powerType": args.type, "powerValue": args.value})
+
+
+def cmd_set_grid_peak_shaving(args):
+    """Grid peak shaving control."""
+    payload = {"gridPeakShaving": 1 if args.action == "on" else 0}
+    if args.power is not None:
+        payload["peakShavingPower"] = args.power
+    _control_cmd(args, "/order/gridPeakShaving/control", "set-grid-peak-shaving", payload)
+
+
+def cmd_set_smart_load(args):
+    """Set smart load settings."""
+    payload = {}
+    if args.on_soc is not None:
+        payload["smartLoadOnSOC"] = args.on_soc
+    if args.off_soc is not None:
+        payload["smartLoadOffSOC"] = args.off_soc
+    if args.on_voltage is not None:
+        payload["smartLoadOnVoltage"] = args.on_voltage
+    if args.off_voltage is not None:
+        payload["smartLoadOffVoltage"] = args.off_voltage
+    _control_cmd(args, "/order/smartload/update", "set-smart-load", payload)
+
+
+def cmd_set_limit_control(args):
+    """Set limit control function."""
+    _control_cmd(args, "/order/sys/limitControl", "set-limit-control",
+                 {"limitControlType": args.type})
+
+
+def cmd_dynamic_control(args):
+    """Set multiple dynamic control parameters at once."""
+    payload = {}
+    if args.params:
+        payload = json.loads(args.params)
+    _control_cmd(args, "/strategy/dynamicControl", "dynamic-control", payload)
+
+
 def _build_parser():
     """Build the argparse parser with all subcommands."""
     parser = argparse.ArgumentParser(
@@ -683,6 +877,68 @@ def _build_parser():
     p_salert = subs.add_parser('station-alerts', help='Fetch station alerts')
     p_salert.add_argument('--station-id', type=int, required=True, help='Station ID')
 
+    # config commands
+    subs.add_parser('config-battery', help='Read battery configuration')
+    subs.add_parser('config-system', help='Read system work mode')
+    subs.add_parser('config-tou', help='Read TOU schedule')
+    subs.add_parser('dynamic-read', help='Read all dynamic control parameters')
+
+    # control commands
+    p_wm = subs.add_parser('set-work-mode', help='Set system work mode')
+    p_wm.add_argument('--mode', required=True,
+                       choices=['SELLING_FIRST', 'ZERO_EXPORT_TO_LOAD', 'ZERO_EXPORT_TO_CT'])
+
+    p_ss = subs.add_parser('set-solar-sell', help='Enable/disable solar sell')
+    p_ss.add_argument('--action', required=True, choices=['on', 'off'])
+
+    p_bp = subs.add_parser('set-battery-param', help='Set battery parameter')
+    p_bp.add_argument('--param', required=True,
+                       choices=['MAX_CHARGE_CURRENT', 'MAX_DISCHARGE_CURRENT',
+                                'GRID_CHARGE_AMPERE', 'BATT_LOW'])
+    p_bp.add_argument('--value', type=int, required=True)
+
+    p_bm = subs.add_parser('set-battery-mode', help='Set battery charge mode')
+    p_bm.add_argument('--mode', required=True, choices=['GRID_CHARGE', 'GEN_CHARGE'])
+    p_bm.add_argument('--action', required=True, choices=['on', 'off'])
+
+    p_bt = subs.add_parser('set-battery-type', help='Set battery type')
+    p_bt.add_argument('--type', required=True,
+                       choices=['BATT_V', 'BATT_SOC', 'LI', 'NO_BATTERY'])
+
+    p_tou = subs.add_parser('set-tou', help='Set TOU schedule')
+    p_tou.add_argument('--settings', required=True, help='JSON string of TOU settings')
+
+    p_ts = subs.add_parser('set-tou-switch', help='Enable/disable TOU')
+    p_ts.add_argument('--action', required=True, choices=['on', 'off'])
+    p_ts.add_argument('--days', default=None, help='Comma-separated days (MON,TUE,...)')
+
+    p_ep = subs.add_parser('set-energy-pattern', help='Set energy priority')
+    p_ep.add_argument('--pattern', required=True,
+                       choices=['BATTERY_FIRST', 'LOAD_FIRST'])
+
+    p_pw = subs.add_parser('set-power', help='Set power limits')
+    p_pw.add_argument('--type', required=True,
+                       choices=['MAX_SELL_POWER', 'MAX_SOLAR_POWER', 'ZERO_EXPORT_POWER'])
+    p_pw.add_argument('--value', type=int, required=True)
+
+    p_gps = subs.add_parser('set-grid-peak-shaving', help='Grid peak shaving')
+    p_gps.add_argument('--action', required=True, choices=['on', 'off'])
+    p_gps.add_argument('--power', type=int, default=None, help='Peak shaving power')
+
+    p_sl = subs.add_parser('set-smart-load', help='Smart load settings')
+    p_sl.add_argument('--on-soc', type=int, default=None)
+    p_sl.add_argument('--off-soc', type=int, default=None)
+    p_sl.add_argument('--on-voltage', type=float, default=None)
+    p_sl.add_argument('--off-voltage', type=float, default=None)
+
+    p_lc = subs.add_parser('set-limit-control', help='Set limit control')
+    p_lc.add_argument('--type', required=True,
+                       choices=['SELL_FIRST', 'ZERO_EXPORT_TO_UPS_LOAD',
+                                'ZERO_EXPORT_TO_CT', 'ZERO_EXPORT_TO_WIRELESS_CT'])
+
+    p_dc = subs.add_parser('dynamic-control', help='Set dynamic control parameters')
+    p_dc.add_argument('--params', required=True, help='JSON string of parameters')
+
     return parser, subs
 
 
@@ -708,6 +964,23 @@ def main():
         'station-info': cmd_station_info,
         'station-history': cmd_station_history,
         'station-alerts': cmd_station_alerts,
+        'config-battery': cmd_config_battery,
+        'config-system': cmd_config_system,
+        'config-tou': cmd_config_tou,
+        'dynamic-read': cmd_dynamic_read,
+        'set-work-mode': cmd_set_work_mode,
+        'set-solar-sell': cmd_set_solar_sell,
+        'set-battery-param': cmd_set_battery_param,
+        'set-battery-mode': cmd_set_battery_mode,
+        'set-battery-type': cmd_set_battery_type,
+        'set-tou': cmd_set_tou,
+        'set-tou-switch': cmd_set_tou_switch,
+        'set-energy-pattern': cmd_set_energy_pattern,
+        'set-power': cmd_set_power,
+        'set-grid-peak-shaving': cmd_set_grid_peak_shaving,
+        'set-smart-load': cmd_set_smart_load,
+        'set-limit-control': cmd_set_limit_control,
+        'dynamic-control': cmd_dynamic_control,
     }
 
     cmd_func = commands.get(args.command)
