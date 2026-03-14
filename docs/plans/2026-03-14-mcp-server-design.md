@@ -59,7 +59,7 @@ Follows MCP best practices: coarse-grained declarative tools grouped by user int
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `command` | enum: `list_devices`, `list_stations`, `station_info` | no (default: `list_devices`) | What to list |
+| `command` | enum: `list_devices`, `list_stations`, `station_info`, `measure_points` | no (default: `list_devices`) | What to list |
 | `station_id` | int | for `station_info` | Station ID |
 
 ### 4. `deye_alerts` — Warnings & Faults

@@ -249,7 +249,8 @@ def get_status(device_sn=None, env_path=None):
         sn = device_sn
     result = http_post(f"{base_url}/device/latest", {"deviceList": [sn]}, headers)
     if not result.get('success'):
-        return {"success": False, "device_sn": sn, "error": result.get('msg'), "api_code": result.get('code')}
+        return {"success": False, "device_sn": sn, "error": result.get('msg'), "api_code": result.get('code'),
+                "suggested_actions": ["Run deye_setup to verify credentials", "Check network connectivity"]}
     data_points = {}
     for dev in result.get('deviceDataList', []):
         if dev['deviceSn'] == sn:
@@ -266,18 +267,35 @@ def get_devices(command="list_devices", station_id=None, device_sn=None, env_pat
     if command == "list_stations":
         result = http_post(f"{base_url}/station/list", {"page": 1, "size": 100}, headers)
         if not result.get('success'):
-            return {"success": False, "device_sn": sn, "error": result.get('msg')}
+            return {"success": False, "device_sn": sn, "error": result.get('msg'),
+                    "suggested_actions": ["Run deye_setup to verify credentials"]}
         return {"success": True, "device_sn": sn, "data": {"stations": result.get('stationList', [])}}
     elif command == "station_info":
+        if not station_id:
+            return {"success": False, "device_sn": sn, "error": "station_id is required for station_info",
+                    "suggested_actions": ["Call with command='list_stations' first to find station IDs"]}
         result = http_post(f"{base_url}/station/info", {"stationId": station_id}, headers)
         if not result.get('success'):
-            return {"success": False, "device_sn": sn, "error": result.get('msg')}
+            return {"success": False, "device_sn": sn, "error": result.get('msg'),
+                    "suggested_actions": ["Verify station_id with command='list_stations'"]}
         data = {k: v for k, v in result.items() if k not in ('success', 'code', 'msg')}
         return {"success": True, "device_sn": sn, "data": data}
+    elif command == "measure_points":
+        result = http_post(f"{base_url}/device/measurePoints", {"deviceSn": sn}, headers)
+        if not result.get('success'):
+            return {"success": False, "device_sn": sn, "error": result.get('msg'),
+                    "suggested_actions": ["Verify device is online with deye_status"]}
+        return {"success": True, "device_sn": sn, "data": {
+            "deviceType": result.get('deviceType', 'DEVICE'),
+            "productId": result.get('productId', ''),
+            "count": len(result.get('measurePoints', [])),
+            "measurePoints": sorted(result.get('measurePoints', [])),
+        }}
     else:  # list_devices
         station_data = http_post(f"{base_url}/station/list", {"page": 1, "size": 100}, headers)
         if not station_data.get('success'):
-            return {"success": False, "device_sn": sn, "error": station_data.get('msg')}
+            return {"success": False, "device_sn": sn, "error": station_data.get('msg'),
+                    "suggested_actions": ["Run deye_setup to verify credentials"]}
         stations = station_data.get('stationList', [])
         all_devices = []
         for station in stations:
@@ -305,7 +323,8 @@ def get_history(granularity, start, end, measure_points=None, station_id=None,
             "stationId": station_id, "granularity": gran, "startAt": start, "endAt": end,
         }, headers)
         if not result.get('success'):
-            return {"success": False, "device_sn": sn, "error": result.get('msg')}
+            return {"success": False, "device_sn": sn, "error": result.get('msg'),
+                    "suggested_actions": ["Verify station_id with deye_devices command='list_stations'"]}
         return {"success": True, "device_sn": sn, "data": {
             "stationId": station_id, "count": len(result.get('dataList', [])),
             "records": result.get('dataList', []),
@@ -318,7 +337,8 @@ def get_history(granularity, start, end, measure_points=None, station_id=None,
     if raw:
         return {"success": True, "device_sn": sn, "data": result}
     if not result.get('success'):
-        return {"success": False, "device_sn": sn, "error": result.get('msg')}
+        return {"success": False, "device_sn": sn, "error": result.get('msg'),
+                "suggested_actions": ["Check date format (YYYY-MM-DD for intraday/daily, YYYY-MM for monthly)"]}
     records = []
     for row in result.get('dataList', []):
         t = format_timestamp(row.get('time', row.get('collectTime', '')))
@@ -344,7 +364,8 @@ def get_alerts(station_id=None, device_sn=None, env_path=None):
             "deviceSn": sn, "page": 1, "size": 50,
         }, headers)
     if not result.get('success'):
-        return {"success": False, "device_sn": sn, "error": result.get('msg')}
+        return {"success": False, "device_sn": sn, "error": result.get('msg'),
+                "suggested_actions": ["Run deye_setup to verify credentials"]}
     return {"success": True, "device_sn": sn, "data": {
         "count": len(result.get('alertList', [])),
         "alerts": result.get('alertList', []),
@@ -365,39 +386,28 @@ def get_config(section="all", device_sn=None, env_path=None):
         # Use dynamic-read (two-step)
         read_result = http_post(f"{base_url}/strategy/dynamicControl/read", {"deviceSn": sn}, headers)
         if not read_result.get('success'):
-            return {"success": False, "device_sn": sn, "error": read_result.get('msg')}
+            return {"success": False, "device_sn": sn, "error": read_result.get('msg'),
+                    "suggested_actions": ["Verify device is online with deye_status"]}
         import time as _time
         for _ in range(5):
             _time.sleep(2)
             result = http_post(f"{base_url}/strategy/dynamicControl/readResult", {"deviceSn": sn}, headers)
             if result.get('success') and result.get('data'):
                 return {"success": True, "device_sn": sn, "data": result.get('data', result)}
-        return {"success": False, "device_sn": sn, "error": "Timeout waiting for dynamic read result"}
+        return {"success": False, "device_sn": sn, "error": "Timeout waiting for dynamic read result",
+                "suggested_actions": ["Device may be offline — try deye_status", "Retry in a few minutes"]}
 
     endpoint = endpoints.get(section)
     if not endpoint:
         return {"success": False, "device_sn": sn, "error": f"Unknown config section: {section}"}
     result = http_post(f"{base_url}{endpoint}", {"deviceSn": sn}, headers)
     if not result.get('success'):
-        return {"success": False, "device_sn": sn, "error": result.get('msg')}
+        return {"success": False, "device_sn": sn, "error": result.get('msg'),
+                "suggested_actions": ["Try section='all' to read via dynamic control"]}
     data = {k: v for k, v in result.items() if k not in ('success', 'code', 'msg', 'requestId')}
     return {"success": True, "device_sn": sn, "data": data}
 
 
-def get_measure_points(device_sn=None, env_path=None):
-    """Return available measure points as dict."""
-    base_url, headers, sn = get_session(env_path=env_path)
-    if device_sn:
-        sn = device_sn
-    result = http_post(f"{base_url}/device/measurePoints", {"deviceSn": sn}, headers)
-    if not result.get('success'):
-        return {"success": False, "device_sn": sn, "error": result.get('msg')}
-    return {"success": True, "device_sn": sn, "data": {
-        "deviceType": result.get('deviceType', 'DEVICE'),
-        "productId": result.get('productId', ''),
-        "count": len(result.get('measurePoints', [])),
-        "measurePoints": sorted(result.get('measurePoints', [])),
-    }}
 
 
 # Control action → (endpoint, payload builder)
@@ -429,7 +439,8 @@ _CONTROL_ACTIONS = {
 def run_control(action, params, device_sn=None, env_path=None):
     """Execute a control command. Returns dict with orderId."""
     if action not in _CONTROL_ACTIONS:
-        return {"success": False, "error": f"Unknown control action: {action}"}
+        return {"success": False, "error": f"Unknown control action: {action}",
+                "suggested_actions": [f"Valid actions: {', '.join(sorted(_CONTROL_ACTIONS.keys()))}"]}
     endpoint, build_payload = _CONTROL_ACTIONS[action]
     base_url, headers, sn = get_session(env_path=env_path)
     if device_sn:
@@ -440,7 +451,8 @@ def run_control(action, params, device_sn=None, env_path=None):
     if result.get('success'):
         order_id = result.get('orderId', result.get('data', {}).get('orderId', 'N/A') if isinstance(result.get('data'), dict) else 'N/A')
         return {"success": True, "device_sn": sn, "data": {"orderId": order_id}}
-    return {"success": False, "device_sn": sn, "error": result.get('msg'), "api_code": result.get('code')}
+    return {"success": False, "device_sn": sn, "error": result.get('msg'), "api_code": result.get('code'),
+            "suggested_actions": ["Check params match the expected format for this action", "Use deye_config to read current settings first"]}
 
 
 def check_setup(env_path=None):
@@ -480,7 +492,8 @@ def get_order_status(order_id, device_sn=None, env_path=None):
     result = http_post(f"{base_url}/order/status", {"orderId": order_id}, headers)
     if result.get('success'):
         return {"success": True, "device_sn": sn, "data": result}
-    return {"success": False, "device_sn": sn, "error": result.get('msg'), "api_code": result.get('code')}
+    return {"success": False, "device_sn": sn, "error": result.get('msg'), "api_code": result.get('code'),
+            "suggested_actions": ["Verify the orderId is correct", "Orders expire after a timeout period"]}
 ```
 
 **Step 4: Run tests to verify they pass**
@@ -575,7 +588,7 @@ Create the FastMCP server with 7 grouped tools.
 Create `tests/test_mcp.py`:
 
 ```python
-"""Tests for MCP server — tool registration and parameter validation."""
+"""Tests for MCP server — tool registration, parameter validation, and error handling."""
 import json
 import os
 import sys
@@ -623,14 +636,57 @@ class TestMcpStatusTool:
         assert "SOC" in parsed["data"]
 
 
+class TestMcpParameterValidation:
+    """Verify MCP tools validate parameters before calling core."""
+
+    def test_history_invalid_granularity_raises_tool_error(self):
+        from deye_mcp import deye_history
+        from fastmcp.exceptions import ToolError
+        import asyncio
+        with pytest.raises(ToolError, match="granularity"):
+            asyncio.run(deye_history(
+                granularity="hourly", start_date="2026-03-13", end_date="2026-03-13"
+            ))
+
+    def test_config_invalid_section_raises_tool_error(self):
+        from deye_mcp import deye_config
+        from fastmcp.exceptions import ToolError
+        import asyncio
+        with pytest.raises(ToolError, match="section"):
+            asyncio.run(deye_config(section="invalid"))
+
+    def test_control_invalid_action_raises_tool_error(self):
+        from deye_mcp import deye_control
+        from fastmcp.exceptions import ToolError
+        import asyncio
+        with pytest.raises(ToolError, match="action"):
+            asyncio.run(deye_control(
+                action="invalid_action", params={}, confirmed=True
+            ))
+
+    def test_devices_invalid_command_raises_tool_error(self):
+        from deye_mcp import deye_devices
+        from fastmcp.exceptions import ToolError
+        import asyncio
+        with pytest.raises(ToolError, match="command"):
+            asyncio.run(deye_devices(command="invalid"))
+
+    def test_setup_invalid_command_raises_tool_error(self):
+        from deye_mcp import deye_setup
+        from fastmcp.exceptions import ToolError
+        import asyncio
+        with pytest.raises(ToolError, match="command"):
+            asyncio.run(deye_setup(command="invalid"))
+
+
 class TestMcpControlTool:
-    """Verify deye_control requires confirmation."""
+    """Verify deye_control requires confirmation and returns focused diff."""
 
     @patch('deye_core.get_session')
     @patch('deye_core.http_post')
-    def test_control_without_confirm_returns_warning(self, mock_post, mock_session):
+    def test_control_without_confirm_returns_diff(self, mock_post, mock_session):
         mock_session.return_value = ("http://base", {"Authorization": "bearer tok"}, "SN123")
-        mock_post.return_value = {"success": True, "batteryCapacity": 5120}
+        mock_post.return_value = {"success": True, "data": {"solarSell": 0, "workMode": 1}}
         from deye_mcp import deye_control
         import asyncio
         result = asyncio.run(deye_control(
@@ -638,6 +694,22 @@ class TestMcpControlTool:
         ))
         parsed = json.loads(result)
         assert parsed["confirmation_required"] is True
+        assert "changes" in parsed
+
+
+class TestMcpErrorHandling:
+    """Verify API failures raise ToolError (isError=true in MCP protocol)."""
+
+    @patch('deye_core.get_session')
+    @patch('deye_core.http_post')
+    def test_status_api_failure_raises_tool_error(self, mock_post, mock_session):
+        mock_session.return_value = ("http://base", {"Authorization": "bearer tok"}, "SN123")
+        mock_post.return_value = {"success": False, "msg": "Token expired", "code": 401}
+        from deye_mcp import deye_status
+        from fastmcp.exceptions import ToolError
+        import asyncio
+        with pytest.raises(ToolError, match="Token expired"):
+            asyncio.run(deye_status())
 ```
 
 **Step 2: Run tests to verify they fail**
@@ -656,6 +728,7 @@ Create `skills/deye-cloud/scripts/deye_mcp.py`:
 import json
 from typing import Optional
 from fastmcp import FastMCP
+from fastmcp.exceptions import ToolError
 
 import deye_core
 
@@ -664,16 +737,35 @@ mcp = FastMCP(
     description="Monitor, configure, and control Deye Hybrid Inverters via the DeyeCloud API.",
 )
 
+# --- Validation constants ---
+_VALID_GRANULARITIES = {"intraday", "daily", "monthly"}
+_VALID_CONFIG_SECTIONS = {"battery", "system", "tou", "all"}
+_VALID_DEVICE_COMMANDS = {"list_devices", "list_stations", "station_info", "measure_points"}
+_VALID_SETUP_COMMANDS = {"check", "order_status"}
+_VALID_CONTROL_ACTIONS = {
+    "set_work_mode", "set_solar_sell", "set_battery_param", "set_battery_mode",
+    "set_battery_type", "set_tou", "set_tou_switch", "set_energy_pattern",
+    "set_power", "set_grid_peak_shaving", "set_smart_load", "set_limit_control",
+    "dynamic_control",
+}
+
+
+def _check_result(result: dict) -> dict:
+    """Raise ToolError if core returned a failure, propagating isError to MCP clients."""
+    if not result.get("success"):
+        msg = result.get("error", "Unknown error")
+        actions = result.get("suggested_actions", [])
+        detail = f"{msg}. Try: {', '.join(actions)}" if actions else msg
+        raise ToolError(detail)
+    return result
+
 
 @mcp.tool
 async def deye_status() -> str:
     """Get current inverter status: PV production, battery SOC, grid power, consumption.
     Use when the user asks about current power, battery level, or solar production."""
-    try:
-        result = deye_core.get_status()
-        return json.dumps(result, indent=2, ensure_ascii=False)
-    except Exception as e:
-        return json.dumps({"success": False, "error": str(e)})
+    result = deye_core.get_status()
+    return json.dumps(_check_result(result), indent=2, ensure_ascii=False)
 
 
 @mcp.tool
@@ -692,18 +784,17 @@ async def deye_history(
         granularity: Data resolution — "intraday" (5-min intervals), "daily", or "monthly"
         start_date: Start date as YYYY-MM-DD (intraday/daily) or YYYY-MM (monthly)
         end_date: End date as YYYY-MM-DD (intraday/daily) or YYYY-MM (monthly)
-        measure_points: Optional comma-separated measure point keys to filter
+        measure_points: Optional comma-separated keys to filter, e.g. "SOC,BatV,GridW"
         station_id: Optional station ID for station-level history
         raw: If true, return raw API response without formatting
     """
-    try:
-        result = deye_core.get_history(
-            granularity=granularity, start=start_date, end=end_date,
-            measure_points=measure_points, station_id=station_id, raw=raw,
-        )
-        return json.dumps(result, indent=2, ensure_ascii=False)
-    except Exception as e:
-        return json.dumps({"success": False, "error": str(e)})
+    if granularity not in _VALID_GRANULARITIES:
+        raise ToolError(f"Invalid granularity '{granularity}'. Must be one of: {', '.join(sorted(_VALID_GRANULARITIES))}")
+    result = deye_core.get_history(
+        granularity=granularity, start=start_date, end=end_date,
+        measure_points=measure_points, station_id=station_id, raw=raw,
+    )
+    return json.dumps(_check_result(result), indent=2, ensure_ascii=False)
 
 
 @mcp.tool
@@ -711,18 +802,18 @@ async def deye_devices(
     command: str = "list_devices",
     station_id: Optional[int] = None,
 ) -> str:
-    """List devices and stations on the account.
-    Use when the user asks about connected devices, stations, or wants to see what's available.
+    """List devices and stations, or get available measure points.
+    Use when the user asks about connected devices, stations, available data points, or wants to see what's available.
 
     Args:
-        command: "list_devices" (all devices), "list_stations" (all stations), or "station_info" (details for one station)
+        command: "list_devices" (all devices), "list_stations" (all stations),
+                 "station_info" (details for one station), or "measure_points" (available data points for the device)
         station_id: Required when command is "station_info"
     """
-    try:
-        result = deye_core.get_devices(command=command, station_id=station_id)
-        return json.dumps(result, indent=2, ensure_ascii=False)
-    except Exception as e:
-        return json.dumps({"success": False, "error": str(e)})
+    if command not in _VALID_DEVICE_COMMANDS:
+        raise ToolError(f"Invalid command '{command}'. Must be one of: {', '.join(sorted(_VALID_DEVICE_COMMANDS))}")
+    result = deye_core.get_devices(command=command, station_id=station_id)
+    return json.dumps(_check_result(result), indent=2, ensure_ascii=False)
 
 
 @mcp.tool
@@ -733,11 +824,8 @@ async def deye_alerts(station_id: Optional[int] = None) -> str:
     Args:
         station_id: If provided, get station-level alerts instead of device alerts
     """
-    try:
-        result = deye_core.get_alerts(station_id=station_id)
-        return json.dumps(result, indent=2, ensure_ascii=False)
-    except Exception as e:
-        return json.dumps({"success": False, "error": str(e)})
+    result = deye_core.get_alerts(station_id=station_id)
+    return json.dumps(_check_result(result), indent=2, ensure_ascii=False)
 
 
 @mcp.tool
@@ -748,11 +836,10 @@ async def deye_config(section: str = "all") -> str:
     Args:
         section: "battery", "system", "tou", or "all" (reads all dynamic parameters)
     """
-    try:
-        result = deye_core.get_config(section=section)
-        return json.dumps(result, indent=2, ensure_ascii=False)
-    except Exception as e:
-        return json.dumps({"success": False, "error": str(e)})
+    if section not in _VALID_CONFIG_SECTIONS:
+        raise ToolError(f"Invalid section '{section}'. Must be one of: {', '.join(sorted(_VALID_CONFIG_SECTIONS))}")
+    result = deye_core.get_config(section=section)
+    return json.dumps(_check_result(result), indent=2, ensure_ascii=False)
 
 
 @mcp.tool
@@ -773,22 +860,27 @@ async def deye_control(
         params: Action-specific parameters as a dict
         confirmed: Must be true to execute. When false, returns current config for comparison.
     """
-    try:
-        if not confirmed:
-            # Read current config for comparison
-            current = deye_core.get_config(section="all")
-            return json.dumps({
-                "confirmation_required": True,
-                "action": action,
-                "proposed_params": params,
-                "current_config": current.get("data", {}),
-                "message": "Review the current config and proposed changes. Call again with confirmed=true to execute.",
-            }, indent=2, ensure_ascii=False)
+    if action not in _VALID_CONTROL_ACTIONS:
+        raise ToolError(f"Invalid action '{action}'. Must be one of: {', '.join(sorted(_VALID_CONTROL_ACTIONS))}")
 
-        result = deye_core.run_control(action=action, params=params)
-        return json.dumps(result, indent=2, ensure_ascii=False)
-    except Exception as e:
-        return json.dumps({"success": False, "error": str(e)})
+    if not confirmed:
+        # Read current config and build a focused before/after diff
+        current = deye_core.get_config(section="all")
+        current_data = current.get("data", {})
+        # Build changes list: show only the keys that the proposed params would affect
+        changes = []
+        for key, new_val in params.items():
+            old_val = current_data.get(key, "<not set>")
+            changes.append({"param": key, "current": old_val, "proposed": new_val})
+        return json.dumps({
+            "confirmation_required": True,
+            "action": action,
+            "changes": changes,
+            "message": "Review the changes above. Call again with confirmed=true to execute.",
+        }, indent=2, ensure_ascii=False)
+
+    result = deye_core.run_control(action=action, params=params)
+    return json.dumps(_check_result(result), indent=2, ensure_ascii=False)
 
 
 @mcp.tool
@@ -803,17 +895,16 @@ async def deye_setup(
         command: "check" (verify credentials) or "order_status" (check control order result)
         order_id: Required when command is "order_status"
     """
-    try:
-        if command == "order_status":
-            if not order_id:
-                return json.dumps({"success": False, "error": "order_id required for order_status"})
-            result = deye_core.get_order_status(order_id=order_id)
-            return json.dumps(result, indent=2, ensure_ascii=False)
-        else:
-            result = deye_core.check_setup()
-            return json.dumps(result, indent=2, ensure_ascii=False)
-    except Exception as e:
-        return json.dumps({"success": False, "error": str(e)})
+    if command not in _VALID_SETUP_COMMANDS:
+        raise ToolError(f"Invalid command '{command}'. Must be one of: {', '.join(sorted(_VALID_SETUP_COMMANDS))}")
+    if command == "order_status":
+        if not order_id:
+            raise ToolError("order_id is required when command is 'order_status'")
+        result = deye_core.get_order_status(order_id=order_id)
+        return json.dumps(_check_result(result), indent=2, ensure_ascii=False)
+    else:
+        result = deye_core.check_setup()
+        return json.dumps(_check_result(result), indent=2, ensure_ascii=False)
 
 
 if __name__ == "__main__":
