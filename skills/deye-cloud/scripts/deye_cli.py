@@ -303,6 +303,110 @@ def cmd_setup(args):
         })
 
 
+# ── Section 4: Monitor Commands ─────────────────────────
+
+def _get_device_sn(args):
+    """Resolve device SN from --device-sn flag or session auto-discovery."""
+    base_url, headers, device_sn = get_session(env_path=args.env_path)
+    if args.device_sn:
+        device_sn = args.device_sn
+    return base_url, headers, device_sn
+
+
+def cmd_status(args):
+    """Fetch latest device data (PV, battery, grid, consumption)."""
+    base_url, headers, device_sn = _get_device_sn(args)
+    result = _http_post(f"{base_url}/device/latest",
+                        {"deviceList": [device_sn]}, headers)
+    if not result.get('success'):
+        if args.json:
+            _json_output(False, "status", device_sn,
+                        error=result.get('msg'), api_code=result.get('code'))
+        else:
+            print(f"Error: {result.get('msg')}")
+        return
+
+    # Parse data points
+    data_points = {}
+    for dev in result.get('deviceDataList', []):
+        if dev['deviceSn'] == device_sn:
+            for point in dev.get('dataList', []):
+                data_points[point['key']] = f"{point['value']} {point.get('unit', '')}".strip()
+
+    if args.json:
+        _json_output(True, "status", device_sn, data=data_points)
+    else:
+        _human_output(f"Status — {device_sn}", data_points)
+
+
+def cmd_devices(args):
+    """List all devices across all stations."""
+    base_url, headers, device_sn = _get_device_sn(args)
+    # Get stations
+    station_data = _http_post(f"{base_url}/station/list",
+                              {"page": 1, "size": 100}, headers)
+    if not station_data.get('success'):
+        if args.json:
+            _json_output(False, "devices", device_sn,
+                        error=station_data.get('msg'), api_code=station_data.get('code'))
+        else:
+            print(f"Error: {station_data.get('msg')}")
+        return
+
+    stations = station_data.get('stationList', [])
+    all_devices = []
+    for station in stations:
+        dev_data = _http_post(f"{base_url}/station/device",
+                              {"page": 1, "size": 100, "stationIds": [station['id']]}, headers)
+        if dev_data.get('success'):
+            for dev in dev_data.get('deviceListItems', []):
+                dev['stationName'] = station.get('name', '')
+                all_devices.append(dev)
+
+    if args.json:
+        _json_output(True, "devices", device_sn, data={
+            "stations": len(stations),
+            "devices": all_devices,
+        })
+    else:
+        _human_output(f"Devices ({len(all_devices)} total)", {
+            dev.get('deviceSn', 'unknown'): f"{dev.get('deviceType', '')} @ {dev.get('stationName', '')}"
+            for dev in all_devices
+        })
+
+
+def cmd_measure_points(args):
+    """List available measure points for the device."""
+    base_url, headers, device_sn = _get_device_sn(args)
+    result = _http_post(f"{base_url}/device/measurePoints",
+                        {"deviceSn": device_sn}, headers)
+    if not result.get('success'):
+        if args.json:
+            _json_output(False, "measure-points", device_sn,
+                        error=result.get('msg'), api_code=result.get('code'))
+        else:
+            print(f"Error: {result.get('msg')}")
+        return
+
+    points = result.get('measurePoints', [])
+    device_type = result.get('deviceType', 'DEVICE')
+    product_id = result.get('productId', '')
+
+    if args.json:
+        _json_output(True, "measure-points", device_sn, data={
+            "deviceType": device_type,
+            "productId": product_id,
+            "count": len(points),
+            "measurePoints": sorted(points),
+        })
+    else:
+        _human_output(f"Measure Points — {device_sn} ({device_type})", {
+            "Product ID": product_id,
+            "Total available": len(points),
+            "Points": ", ".join(sorted(points)),
+        })
+
+
 def _build_parser():
     """Build the argparse parser with all subcommands."""
     parser = argparse.ArgumentParser(
@@ -318,6 +422,11 @@ def _build_parser():
     # setup
     subs.add_parser('setup', help='Create or validate credentials file')
 
+    # monitor commands
+    subs.add_parser('status', help='Fetch latest device data')
+    subs.add_parser('devices', help='List all devices')
+    subs.add_parser('measure-points', help='List available measure points')
+
     return parser, subs
 
 
@@ -332,6 +441,9 @@ def main():
 
     commands = {
         'setup': cmd_setup,
+        'status': cmd_status,
+        'devices': cmd_devices,
+        'measure-points': cmd_measure_points,
     }
 
     cmd_func = commands.get(args.command)
