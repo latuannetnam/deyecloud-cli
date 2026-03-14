@@ -407,6 +407,119 @@ def cmd_measure_points(args):
         })
 
 
+# ── Section 5: History & Alert Commands ─────────────────
+
+def cmd_history(args):
+    """Fetch device history data with granularity control."""
+    base_url, headers, device_sn = _get_device_sn(args)
+    payload = {
+        'deviceSn': device_sn,
+        'granularity': args.granularity,
+        'startAt': args.start,
+        'endAt': args.end,
+    }
+    if args.points:
+        payload['measurePoints'] = [p.strip() for p in args.points.split(',')]
+
+    result = _http_post(f"{base_url}/device/history", payload, headers)
+    if not result.get('success'):
+        if args.json:
+            _json_output(False, "history", device_sn,
+                        error=result.get('msg'), api_code=result.get('code'))
+        else:
+            print(f"Error: {result.get('msg')}")
+        return
+
+    records = []
+    for row in result.get('dataList', []):
+        t = _format_timestamp(row.get('time', row.get('collectTime', '')))
+        items = {it['key']: f"{it['value']} {it.get('unit', '')}" for it in row.get('itemList', [])}
+        records.append({"time": t, **items})
+
+    if args.json:
+        _json_output(True, "history", device_sn, data={
+            "granularity": args.granularity,
+            "period": f"{args.start} to {args.end}",
+            "count": len(records),
+            "records": records,
+        })
+    else:
+        gran_labels = {1: 'Intraday (5-min)', 2: 'Daily', 3: 'Monthly'}
+        _human_output(
+            f"History — {device_sn} — {gran_labels.get(args.granularity, args.granularity)}",
+            {"Period": f"{args.start} to {args.end}", "Records": len(records)},
+        )
+        for rec in records:
+            parts = ' | '.join(f"{k}: {v}" for k, v in rec.items() if k != 'time')
+            print(f"  {rec['time']}  {parts}")
+
+
+def cmd_history_raw(args):
+    """Fetch raw history JSON without formatting."""
+    base_url, headers, device_sn = _get_device_sn(args)
+    payload = {
+        'deviceSn': device_sn,
+        'granularity': args.granularity,
+        'startAt': args.start,
+        'endAt': args.end,
+    }
+    if args.points:
+        payload['measurePoints'] = [p.strip() for p in args.points.split(',')]
+
+    result = _http_post(f"{base_url}/device/history", payload, headers)
+    print(json.dumps(result, indent=2, ensure_ascii=False))
+
+
+def cmd_alerts(args):
+    """Fetch device alerts/warnings."""
+    base_url, headers, device_sn = _get_device_sn(args)
+    result = _http_post(f"{base_url}/device/alert/list", {
+        "deviceSn": device_sn,
+        "page": 1,
+        "size": 50,
+    }, headers)
+    if not result.get('success'):
+        if args.json:
+            _json_output(False, "alerts", device_sn,
+                        error=result.get('msg'), api_code=result.get('code'))
+        else:
+            print(f"Error: {result.get('msg')}")
+        return
+
+    alerts = result.get('alertList', [])
+    if args.json:
+        _json_output(True, "alerts", device_sn, data={
+            "count": len(alerts),
+            "alerts": alerts,
+        })
+    else:
+        _human_output(f"Alerts — {device_sn}", {"Count": len(alerts)})
+        for alert in alerts:
+            print(f"  [{alert.get('alertLevel', '?')}] {alert.get('alertMsg', '')} "
+                  f"({_format_timestamp(alert.get('alertTime', ''))})")
+
+
+def cmd_order_status(args):
+    """Check the status of a control order by ID."""
+    base_url, headers, device_sn = _get_device_sn(args)
+    result = _http_post(f"{base_url}/order/status", {
+        "orderId": args.order_id,
+    }, headers)
+    if args.json:
+        if result.get('success'):
+            _json_output(True, "order-status", device_sn, data=result)
+        else:
+            _json_output(False, "order-status", device_sn,
+                        error=result.get('msg'), api_code=result.get('code'))
+    else:
+        if result.get('success'):
+            _human_output(f"Order Status — {args.order_id}", {
+                k: v for k, v in result.items() if k != 'success'
+            })
+        else:
+            print(f"Error: {result.get('msg')}")
+
+
 def _build_parser():
     """Build the argparse parser with all subcommands."""
     parser = argparse.ArgumentParser(
@@ -427,6 +540,25 @@ def _build_parser():
     subs.add_parser('devices', help='List all devices')
     subs.add_parser('measure-points', help='List available measure points')
 
+    # history commands
+    p_hist = subs.add_parser('history', help='Fetch device history')
+    p_hist.add_argument('--granularity', type=int, default=1,
+                        help='1=intraday(5min), 2=daily, 3=monthly')
+    p_hist.add_argument('--start', required=True, help='Start date (YYYY-MM-DD or YYYY-MM)')
+    p_hist.add_argument('--end', required=True, help='End date (YYYY-MM-DD or YYYY-MM)')
+    p_hist.add_argument('--points', default=None, help='Comma-separated measure point keys')
+
+    p_raw = subs.add_parser('history-raw', help='Fetch raw history JSON')
+    p_raw.add_argument('--granularity', type=int, default=1)
+    p_raw.add_argument('--start', required=True)
+    p_raw.add_argument('--end', required=True)
+    p_raw.add_argument('--points', default=None)
+
+    subs.add_parser('alerts', help='Fetch device alerts')
+
+    p_order = subs.add_parser('order-status', help='Check control order status')
+    p_order.add_argument('--order-id', required=True, help='Order ID to check')
+
     return parser, subs
 
 
@@ -444,6 +576,10 @@ def main():
         'status': cmd_status,
         'devices': cmd_devices,
         'measure-points': cmd_measure_points,
+        'history': cmd_history,
+        'history-raw': cmd_history_raw,
+        'alerts': cmd_alerts,
+        'order-status': cmd_order_status,
     }
 
     cmd_func = commands.get(args.command)
