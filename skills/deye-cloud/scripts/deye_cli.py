@@ -7,10 +7,15 @@ This is a thin CLI wrapper over deye_core. All business logic lives in deye_core
 import argparse
 import json
 import sys
+import io
+
+# Ensure stdout supports UTF-8 on Windows
+if sys.platform == 'win32':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 from datetime import datetime, timezone, timedelta
 
 from deye_core import (
-    DEFAULT_ENV_PATH, LOCAL_TZ,
+    LOCAL_TZ,
     load_env, save_env, http_post, http_get, hash_password,
     obtain_token, discover_device, get_session, format_timestamp,
     get_status, get_devices, get_history, get_alerts, get_config,
@@ -443,7 +448,7 @@ def _build_parser():
     )
     parser.add_argument('--json', action='store_true', help='Output in JSON format')
     parser.add_argument('--device-sn', default=None, help='Override device serial number')
-    parser.add_argument('--env-path', default=DEFAULT_ENV_PATH, help='Path to .env file')
+    parser.add_argument('--env-path', default=None, help='Path to .env file (default: auto-detect CWD/.env → ~/.deye/.env)')
 
     subs = parser.add_subparsers(dest='command', help='Available commands')
 

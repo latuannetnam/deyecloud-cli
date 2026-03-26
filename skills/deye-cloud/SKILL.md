@@ -127,9 +127,16 @@ Always use `--json` flag for structured output:
 python3 skills/deye-cloud/scripts/deye_cli.py --json <command> [args...]
 ```
 
+The CLI auto-detects credentials in this order:
+1. **`$DEYE_ENV_PATH`** — explicit environment variable override
+2. **`{cwd}/.env`** — project `.env` in the current working directory (default)
+3. **`~/.deye/.env`** — fallback
+
+This means you don't need to specify `--env-path` when running from the project root — it picks up your `DeyeCloud-cli/.env` automatically.
+
 Optional global flags:
 - `--device-sn SN` — Override device serial number (default: auto-discovered)
-- `--env-path PATH` — Override credentials file path
+- `--env-path PATH` — Explicitly override the .env path
 
 ## ⚠️ CRITICAL SAFETY PROTOCOL
 

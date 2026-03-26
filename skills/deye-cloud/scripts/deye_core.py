@@ -16,7 +16,24 @@ from pathlib import Path
 from urllib.request import Request, urlopen
 
 # ── Constants ──────────────────────────────────────────
-DEFAULT_ENV_PATH = os.path.join(Path.home(), '.deye', '.env')
+_DOTENV_DEFAULT = os.path.join(Path.home(), '.deye', '.env')
+
+
+def DEFAULT_ENV_PATH() -> str:
+    """Resolve the .env path.
+
+    Priority:
+      1. $DEYE_ENV_PATH        (explicit override — set by the skill)
+      2. CWD/.env              (project .env — picked up automatically)
+      3. ~/.deye/.env           (default fallback)
+    """
+    override = os.environ.get('DEYE_ENV_PATH')
+    if override:
+        return override
+    cwd_env = os.path.join(os.getcwd(), '.env')
+    if os.path.isfile(cwd_env):
+        return cwd_env
+    return _DOTENV_DEFAULT
 TIMEOUT = 15
 TOKEN_MARGIN_SEC = 3600  # 1 hour safety margin before token expiry
 LOCAL_TZ = timezone(timedelta(hours=7))  # UTC+7
@@ -146,7 +163,7 @@ def discover_device(base_url: str, headers: dict) -> str:
 
 def get_session(env_path: str = None) -> tuple:
     """Return (base_url, headers, device_sn), refreshing token and discovering device as needed."""
-    env_path = env_path or DEFAULT_ENV_PATH
+    env_path = env_path or DEFAULT_ENV_PATH()
     env = load_env(env_path)
 
     base_url = env.get('DEYE_BASE_URL', '').rstrip('/')
@@ -430,7 +447,7 @@ def run_control(action, params, device_sn=None, env_path=None):
 
 def check_setup(env_path=None):
     """Check or create credentials file. Returns dict."""
-    env_path = env_path or DEFAULT_ENV_PATH
+    env_path = env_path or DEFAULT_ENV_PATH()
     env = load_env(env_path)
     if env.get('DEYE_APP_ID') and env.get('DEYE_EMAIL'):
         return {"success": True, "data": {
