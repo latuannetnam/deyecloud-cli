@@ -2,6 +2,10 @@
 name: deye-cloud
 description: Monitor, configure, and control Deye Hybrid Inverters via the DeyeCloud API. Use when the user asks about solar panels, battery status, inverter settings, energy production, grid export, or any Deye/solar-related topic.
 ---
+---
+name: deye-cloud
+description: Monitor, configure, and control Deye Hybrid Inverters via the DeyeCloud API. Use when the user asks about solar panels, battery status, inverter settings, energy production, grid export, or any Deye/solar-related topic.
+---
 
 # Deye Cloud Skill
 

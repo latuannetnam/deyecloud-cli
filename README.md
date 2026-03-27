@@ -22,7 +22,27 @@ CLI, MCP Server, and AI Skill for managing Deye Hybrid Inverters via the [DeyeCl
 
 ## Quick Start
 
-### 1. Setup credentials
+### 1. Install the Claude Code skill
+
+The skill is the fastest way to interact with your inverter via natural language.
+
+```powershell
+# Run from this project directory
+.\install-skill.ps1
+```
+
+Then start a **new Claude Code session** and use:
+
+```
+/deye-cloud setup     # configure credentials
+/deye-cloud status    # check inverter status
+```
+
+> On first run, `/deye-cloud setup` creates `~/.deye/.env` — see [Step 2](#2-setup-credentials) below to fill in your credentials.
+
+---
+
+### 2. Setup credentials {#setup-credentials}
 
 ```bash
 python3 skills/deye-cloud/scripts/deye_cli.py setup
@@ -198,17 +218,31 @@ Antigravity auto-discovers skills via the `skills/` directory. Once deployed, it
 
 ### Deploy to Claude Code
 
-Claude Code uses the same skill discovery mechanism. Place the skill in your project:
+The **recommended way** to install the skill for use in any Claude Code project is via the installer script. It copies the skill to your personal `~/.claude/skills/` directory — making it available across all projects without needing to copy anything into each one.
 
-```bash
-cp -r skills/deye-cloud/ /path/to/your-project/skills/deye-cloud/
+```powershell
+# From this project directory
+.\install-skill.ps1
+
+# Or from anywhere, pointing to the project
+.\install-skill.ps1 -ProjectPath "D:\latuan\Programming\deyecloud-cli"
 ```
 
-Or symlink it:
+The script handles everything:
+- Copies `SKILL.md`, `references/`, and `scripts/` to `~/.claude/skills/deye-cloud/`
+- Automatically strips unsupported frontmatter fields (`allowed-tools`, `disable-model-invocation`)
+- Optionally syncs the corrected `SKILL.md` back to this project (`-SkipSync` to disable)
 
-```bash
-ln -s /path/to/deyecloud-cli/skills/deye-cloud /path/to/your-project/skills/deye-cloud
+Once installed, start a **new Claude Code session** and try:
+
 ```
+/deye-cloud setup
+/deye-cloud status
+```
+
+Or ask naturally: *"What's my battery status?"*
+
+> **Why a personal install?** Skills in `~/.claude/skills/` are available in every Claude Code project. If you prefer project-scoped installs instead, copy `skills/deye-cloud/` directly into `.claude/skills/` within any individual project.
 
 ### Deploy to Any AI Agent
 
@@ -225,6 +259,7 @@ The CLI works standalone. Any agent that can execute shell commands can use it:
 
 ```
 deyecloud-cli/
+├── install-skill.ps1             # Claude Code skill installer
 ├── skills/deye-cloud/
 │   ├── SKILL.md                  # AI agent instructions (CLI + MCP)
 │   ├── scripts/
