@@ -63,7 +63,7 @@ Check credentials or track order status.
 If credentials are not configured yet:
 
 ```bash
-python3 skills/deye-cloud/scripts/deye_cli.py --json setup
+python3 ${CLAUDE_SKILL_DIR}/scripts/deye_cli.py --json setup
 ```
 
 Then guide the user to edit `~/.deye/.env` with their Deye Cloud developer credentials:
@@ -124,7 +124,7 @@ After setup, all subsequent commands auto-authenticate and cache the token.
 Always use `--json` flag for structured output:
 
 ```bash
-python3 skills/deye-cloud/scripts/deye_cli.py --json <command> [args...]
+python3 ${CLAUDE_SKILL_DIR}/scripts/deye_cli.py --json <command> [args...]
 ```
 
 The CLI auto-detects credentials in this order:
@@ -167,7 +167,7 @@ Acceptable confirmations: "Yes", "Confirm", "Go ahead", "Do it"
 
 ### Step 6: VERIFY the result
 ```bash
-python3 skills/deye-cloud/scripts/deye_cli.py --json order-status --order-id <ID>
+python3 ${CLAUDE_SKILL_DIR}/scripts/deye_cli.py --json order-status --order-id <ID>
 ```
 Report success (status=666) or failure to the user.
 
