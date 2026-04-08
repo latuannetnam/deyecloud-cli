@@ -1,6 +1,13 @@
 # deyecloud-cli
 
-CLI, MCP Server, and AI Skill for managing Deye Hybrid Inverters via the [DeyeCloud Developer API](https://developer.deyecloud.com). Provides **29 CLI subcommands** and **7 MCP tools** covering real-time monitoring, configuration reading, and remote control.
+CLI, MCP Server, and AI Skills for managing Deye Hybrid Inverters via the [DeyeCloud Developer API](https://developer.deyecloud.com). Provides **29 CLI subcommands**, **7 MCP tools**, and **two Claude Code skills** covering real-time monitoring, configuration reading, and remote control.
+
+## Two Skills, One Purpose
+
+Skill | Best for
+------ | -------
+**`/deye-cloud`** | Real-time status, history, config, control — all inverter operations
+**`/deye-cloud-daily`** | Detailed hourly energy balance report for a specific day
 
 ## Features
 
@@ -22,23 +29,25 @@ CLI, MCP Server, and AI Skill for managing Deye Hybrid Inverters via the [DeyeCl
 
 ## Quick Start
 
-### 1. Install the Claude Code skill
+### 1. Install the Claude Code skills
 
-The skill is the fastest way to interact with your inverter via natural language.
+Both skills are installed together in one step:
 
 ```powershell
 # Run from this project directory
 .\install-skill.ps1
 ```
 
-Then start a **new Claude Code session** and use:
+Then start a **new Claude Code session**:
 
 ```
-/deye-cloud setup     # configure credentials
-/deye-cloud status    # check inverter status
+/deye-cloud setup          # configure credentials (first run only)
+/deye-cloud status         # real-time inverter status
+/deye-cloud-daily          # yesterday's hourly energy report
+/deye-cloud-daily --date 2026-04-01
 ```
 
-> On first run, `/deye-cloud setup` creates `~/.deye/.env` — see [Step 2](#2-setup-credentials) below to fill in your credentials.
+> On first run, `/deye-cloud setup` creates `~/.deye/.env` — see [Step 2](#2-setup-credentials) below to fill in your credentials. Both skills share the same credentials file.
 
 ---
 
@@ -149,9 +158,16 @@ python3 skills/deye-cloud/scripts/deye_cli.py [--json] [--device-sn SN] [--env-p
 
 ## AI Skill Usage
 
-This project is designed as an **AI coding agent skill** — an instruction set that teaches an AI assistant how to manage your Deye inverter through natural language.
+This project ships **two AI coding agent skills** — instruction sets that teach an AI assistant to manage your Deye inverter through natural language.
 
-### How It Works
+### Skill Overview
+
+Skill | Use when the user asks about...
+:--- | :----------------------------
+**`/deye-cloud`** | Real-time status, history, config, control
+**`/deye-cloud-daily`** | A specific day's hourly energy balance
+
+### How `/deye-cloud` Works
 
 ```
                           ┌─── CLI Mode (Antigravity, Claude Code) ───┐
@@ -165,11 +181,20 @@ You ──> AI Agent ──> SKILL.md ──> python3 deye_cli.py --json <cmd>
                               └──────── Deye Cloud API ───────────┘
 ```
 
-Ask your AI agent things like:
+### Example prompts
+
+With **`/deye-cloud`**:
+
 - *"What's my current battery level?"*
 - *"Show me yesterday's solar production"*
 - *"What work mode is my inverter in?"*
 - *"Change the max charge current to 50A"* (the AI will confirm before executing)
+
+With **`/deye-cloud-daily`**:
+
+- *"Show me yesterday's energy report"*
+- *"What was my solar production on April 1st?"*
+- *"Give me the hourly breakdown for last Monday"*
 
 ### Safety Protocol
 
@@ -218,31 +243,35 @@ Antigravity auto-discovers skills via the `skills/` directory. Once deployed, it
 
 ### Deploy to Claude Code
 
-The **recommended way** to install the skill for use in any Claude Code project is via the installer script. It copies the skill to your personal `~/.claude/skills/` directory — making it available across all projects without needing to copy anything into each one.
+The **recommended way** to install skills for use in any Claude Code project is via the installer script. It copies all skills found in `skills/` to your personal `~/.claude/skills/` directory — making them available across all projects without needing to copy anything into each one.
 
 ```powershell
-# From this project directory
+# From this project directory — installs ALL skills (deye-cloud, deye-cloud-daily, ...)
 .\install-skill.ps1
 
 # Or from anywhere, pointing to the project
 .\install-skill.ps1 -ProjectPath "D:\latuan\Programming\deyecloud-cli"
+
+# Skip syncing corrected SKILL.md back to the project
+.\install-skill.ps1 -SkipSync
 ```
 
-The script handles everything:
-- Copies `SKILL.md`, `references/`, and `scripts/` to `~/.claude/skills/deye-cloud/`
+The script handles everything for each skill:
+
+- Copies `SKILL.md`, `references/`, and `scripts/` to `~/.claude/skills/<skill-name>/`
 - Automatically strips unsupported frontmatter fields (`allowed-tools`, `disable-model-invocation`)
-- Optionally syncs the corrected `SKILL.md` back to this project (`-SkipSync` to disable)
+- Reads the `description` field from each skill's own `SKILL.md`
+- Optionally syncs corrected `SKILL.md` files back to the project (`-SkipSync` to disable)
 
-Once installed, start a **new Claude Code session** and try:
+Once installed, start a **new Claude Code session**:
 
-```
+```text
 /deye-cloud setup
 /deye-cloud status
+/deye-cloud-daily
 ```
 
-Or ask naturally: *"What's my battery status?"*
-
-> **Why a personal install?** Skills in `~/.claude/skills/` are available in every Claude Code project. If you prefer project-scoped installs instead, copy `skills/deye-cloud/` directly into `.claude/skills/` within any individual project.
+> **Why a personal install?** Skills in `~/.claude/skills/` are available in every Claude Code project. If you prefer project-scoped installs instead, copy individual `skills/<name>/` folders directly into `.claude/skills/` within any project.
 
 ### Deploy to Any AI Agent
 
@@ -259,22 +288,27 @@ The CLI works standalone. Any agent that can execute shell commands can use it:
 
 ```
 deyecloud-cli/
-├── install-skill.ps1             # Claude Code skill installer
-├── skills/deye-cloud/
-│   ├── SKILL.md                  # AI agent instructions (CLI + MCP)
-│   ├── scripts/
-│   │   ├── deye_core.py          # Shared business logic (returns dicts)
-│   │   ├── deye_cli.py           # CLI wrapper (argparse, 29 subcommands)
-│   │   └── deye_mcp.py           # MCP server (FastMCP, 7 grouped tools)
-│   └── references/
-│       ├── api-overview.md       # Base URLs, auth flow, response format
-│       ├── monitoring.md         # Measure point codes, history granularity
-│       ├── configuration.md      # Battery params, work modes, TOU structure
-│       └── control.md            # Enum values, order flow, safety warnings
-├── tests/                        # pytest unit tests (42 tests)
-├── requirements.txt              # fastmcp dependency (MCP server only)
-├── samples/                      # Reference Python scripts from Deye API docs
-└── docs/plans/                   # Design and implementation plan documents
+├── install-skill.ps1                    # Installs ALL skills from skills/ to ~/.claude/skills/
+├── skills/
+│   ├── deye-cloud/
+│   │   ├── SKILL.md                    # AI agent instructions (CLI + MCP)
+│   │   ├── scripts/
+│   │   │   ├── deye_core.py            # Shared business logic (returns dicts)
+│   │   │   ├── deye_cli.py             # CLI wrapper (argparse, 29 subcommands)
+│   │   │   └── deye_mcp.py             # MCP server (FastMCP, 7 grouped tools)
+│   │   └── references/
+│   │       ├── api-overview.md         # Base URLs, auth flow, response format
+│   │       ├── monitoring.md           # Measure point codes, history granularity
+│   │       ├── configuration.md        # Battery params, work modes, TOU structure
+│   │       └── control.md               # Enum values, order flow, safety warnings
+│   └── deye-cloud-daily/
+│       ├── SKILL.md                    # AI agent instructions (hourly energy report)
+│       └── scripts/
+│           └── deye_daily.py           # Hourly energy balance analyzer (reuses deye_core.py)
+├── tests/                              # pytest unit tests (42 tests)
+├── requirements.txt                     # fastmcp dependency (MCP server only)
+├── samples/                             # Reference Python scripts from Deye API docs
+└── docs/plans/                          # Design and implementation plan documents
 ```
 
 ## Running Tests
