@@ -209,3 +209,4 @@ __marimo__/
 # Worktrees
 .worktrees/
 .claude/settings.local.json
+.claude/skills/
