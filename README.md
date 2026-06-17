@@ -8,6 +8,7 @@ Skill | Best for
 ------ | -------
 **`/deye-cloud`** | Real-time status, history, config, control — all inverter operations
 **`/deye-cloud-daily`** | Detailed hourly energy balance report for a specific day
+**`/deye-cloud-monthly`** | Monthly / multi-month energy summary with EVN tiered pricing and solar savings
 
 ## Features
 
@@ -337,11 +338,15 @@ deyecloud-cli/
 │   │       ├── monitoring.md           # Measure point codes, history granularity
 │   │       ├── configuration.md        # Battery params, work modes, TOU structure
 │   │       └── control.md               # Enum values, order flow, safety warnings
-│   └── deye-cloud-daily/
-│       ├── SKILL.md                    # AI agent instructions (hourly energy report)
+│   ├── deye-cloud-daily/
+│   │   ├── SKILL.md                    # AI agent instructions (hourly energy report)
+│   │   └── scripts/
+│   │       └── deye_daily.py           # Hourly energy balance analyzer (reuses deye_core.py)
+│   └── deye-cloud-monthly/
+│       ├── SKILL.md                    # AI agent instructions (monthly/multi-month energy report with EVN pricing)
 │       └── scripts/
-│           └── deye_daily.py           # Hourly energy balance analyzer (reuses deye_core.py)
-├── tests/                              # pytest unit tests (42 tests)
+│           └── deye_monthly.py         # Monthly/multi-month energy balance analyzer (reuses deye_core.py)
+├── tests/                              # pytest unit tests (55 tests)
 ├── requirements.txt                     # fastmcp dependency (MCP server only)
 ├── samples/                             # Reference Python scripts from Deye API docs
 └── docs/plans/                          # Design and implementation plan documents
