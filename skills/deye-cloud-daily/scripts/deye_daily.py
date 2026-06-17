@@ -18,15 +18,9 @@ import sys
 from datetime import date, datetime, timezone, timedelta
 from pathlib import Path
 
-# ── Add deye-cloud scripts to import path ──────────────────────────────
-_SCRIPT_DIR = Path(__file__).parent.resolve()
-_DEYE_CLOUD_DIR = _SCRIPT_DIR.parent.parent / "deye-cloud" / "scripts"
-
-# Check sibling path first, then allow override via env
-if _DEYE_CLOUD_DIR.is_dir():
-    sys.path.insert(0, str(_DEYE_CLOUD_DIR))
-
-import deye_core
+# ── Locate the shared deye_core module (see _bootstrap.py) ─────────────
+import _bootstrap  # noqa: F401,E402  -- must precede `import deye_core`
+import deye_core  # noqa: E402
 
 LOCAL_TZ = timezone(timedelta(hours=7))
 
