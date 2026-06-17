@@ -10,7 +10,22 @@ Manage Deye Hybrid Inverters through natural language. Supports two modes:
 ## Mode Detection
 
 - **MCP Mode** (Claude Desktop, Cursor, Cline): If `deye_status`, `deye_history`, etc. tools are available → use them directly.
-- **CLI Mode** (Antigravity, Claude Code): If MCP tools are NOT available → use `python3 skills/deye-cloud/scripts/deye_cli.py --json <command>`.
+- **CLI Mode** (Antigravity, Claude Code): If MCP tools are NOT available → use `python3 "${CLAUDE_SKILL_DIR}/scripts/deye_cli.py" --json <command>`.
+
+---
+
+## Running scripts
+
+This skill ships Python scripts in its own `scripts/` folder. Invoke them with:
+
+- **Claude Code:** `python3 "${CLAUDE_SKILL_DIR}/scripts/<file>.py" ...`
+- **Other harnesses (Antigravity, Codex, Gemini, Copilot):** the skill directory
+  is the folder containing this `SKILL.md`. Run
+  `python3 <skill-dir>/scripts/<file>.py ...` — e.g. from the repo that is
+  `python3 skills/deye-cloud/scripts/<file>.py ...`.
+
+Scripts self-locate both the shared core and the `.env`, so there are no
+working-directory assumptions — you only need to run the correct `.py` file.
 
 ---
 
@@ -63,7 +78,7 @@ Check credentials or track order status.
 If credentials are not configured yet:
 
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/scripts/deye_cli.py --json setup
+python3 "${CLAUDE_SKILL_DIR}/scripts/deye_cli.py" --json setup
 ```
 
 Then guide the user to edit `~/.deye/.env` with their Deye Cloud developer credentials:
@@ -124,7 +139,7 @@ After setup, all subsequent commands auto-authenticate and cache the token.
 Always use `--json` flag for structured output:
 
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/scripts/deye_cli.py --json <command> [args...]
+python3 "${CLAUDE_SKILL_DIR}/scripts/deye_cli.py" --json <command> [args...]
 ```
 
 The CLI auto-detects credentials in this order:
@@ -167,7 +182,7 @@ Acceptable confirmations: "Yes", "Confirm", "Go ahead", "Do it"
 
 ### Step 6: VERIFY the result
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/scripts/deye_cli.py --json order-status --order-id <ID>
+python3 "${CLAUDE_SKILL_DIR}/scripts/deye_cli.py" --json order-status --order-id <ID>
 ```
 Report success (status=666) or failure to the user.
 

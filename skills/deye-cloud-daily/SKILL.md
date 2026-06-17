@@ -28,6 +28,21 @@ current) from the Deye Cloud API.
 
 ---
 
+## Running scripts
+
+This skill ships Python scripts in its own `scripts/` folder. Invoke them with:
+
+- **Claude Code:** `python3 "${CLAUDE_SKILL_DIR}/scripts/<file>.py" ...`
+- **Other harnesses (Antigravity, Codex, Gemini, Copilot):** the skill directory
+  is the folder containing this `SKILL.md`. Run
+  `python3 <skill-dir>/scripts/<file>.py ...` — e.g. from the repo that is
+  `python3 skills/deye-cloud-daily/scripts/<file>.py ...`.
+
+Scripts self-locate both the shared core and the `.env`, so there are no
+working-directory assumptions — you only need to run the correct `.py` file.
+
+---
+
 ## Workflow
 
 ### Step 1 — Detect the date
@@ -47,7 +62,7 @@ Default: `yesterday` if no date is specified.
 ### Step 2 — Run the analyzer
 
 ```bash
-python3 skills/deye-cloud-daily/scripts/deye_daily.py --date <DATE> --output text
+python3 "${CLAUDE_SKILL_DIR}/scripts/deye_daily.py" --date <DATE> --output text
 ```
 
 - The script auto-detects credentials via the same `.env` priority as `deye-cloud`
@@ -95,7 +110,7 @@ Human-readable ASCII table, suitable for copying into a conversation response.
 Use `--output json` to get structured data:
 
 ```bash
-python3 skills/deye-cloud-daily/scripts/deye_daily.py --date yesterday --output json
+python3 "${CLAUDE_SKILL_DIR}/scripts/deye_daily.py" --date yesterday --output json
 ```
 
 Returns:
@@ -161,11 +176,9 @@ Always show the cross-check block after the table. It validates the table totals
 
 ## Script Location & Dependencies
 
-- **Script**: `skills/deye-cloud-daily/scripts/deye_daily.py`
+- **Script**: Claude Code: `"${CLAUDE_SKILL_DIR}/scripts/deye_daily.py"` — other harnesses: `skills/deye-cloud-daily/scripts/deye_daily.py`
 - **Reuses**: `deye-cloud/scripts/deye_core.py` (API calls, auth, session)
 - **No new pip dependencies** — stdlib only (json, re, datetime, argparse)
 - **Python**: 3.12+
 
-The script locates `deye_core.py` via a sibling-directory import
-(`../../deye-cloud/scripts/`). No extra configuration needed if `deye-cloud`
-skill is installed.
+The script locates `deye_core.py` via `_bootstrap.py` (env `$DEYE_CORE_DIR` → sibling `deye-cloud/scripts/`). No configuration needed when the suite is installed together.
