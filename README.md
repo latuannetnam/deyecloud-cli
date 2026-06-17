@@ -33,10 +33,21 @@ Skill | Best for
 
 Both skills are installed together in one step:
 
-```powershell
-# Run from this project directory
-.\install-skill.ps1
+```bash
+# Global (default) -> ~/.claude/skills/
+python install.py
+
+# Per-project       -> ./.claude/skills/
+python install.py --scope local
+
+# Explicit target   -> <PATH>/.claude/skills/
+python install.py --target /path/to/project
+
+# Preview without writing
+python install.py --dry-run
 ```
+
+Windows wrapper: `.\install-skill.ps1 --scope local` · POSIX wrapper: `./install.sh --scope local`
 
 Then start a **new Claude Code session**:
 
@@ -241,27 +252,30 @@ cp -r skills/deye-cloud/ /path/to/your-project/skills/deye-cloud/
 
 Antigravity auto-discovers skills via the `skills/` directory. Once deployed, it will detect the `SKILL.md` frontmatter and activate the skill when solar/inverter topics arise.
 
-### Deploy to Claude Code
+### Install the skill suite
 
-The **recommended way** to install skills for use in any Claude Code project is via the installer script. It copies all skills found in `skills/` to your personal `~/.claude/skills/` directory — making them available across all projects without needing to copy anything into each one.
+The suite is always installed together. Use the cross-platform installer:
 
-```powershell
-# From this project directory — installs ALL skills (deye-cloud, deye-cloud-daily, ...)
-.\install-skill.ps1
+```bash
+# Global (default) -> ~/.claude/skills/
+python install.py
 
-# Or from anywhere, pointing to the project
-.\install-skill.ps1 -ProjectPath "D:\latuan\Programming\deyecloud-cli"
+# Per-project       -> ./.claude/skills/
+python install.py --scope local
 
-# Skip syncing corrected SKILL.md back to the project
-.\install-skill.ps1 -SkipSync
+# Explicit target   -> <PATH>/.claude/skills/
+python install.py --target /path/to/project
+
+# Preview without writing
+python install.py --dry-run
 ```
 
-The script handles everything for each skill:
+Windows wrapper: `.\install-skill.ps1 --scope local` · POSIX wrapper: `./install.sh --scope local`
 
-- Copies `SKILL.md`, `references/`, and `scripts/` to `~/.claude/skills/<skill-name>/`
-- Automatically strips unsupported frontmatter fields (`allowed-tools`, `disable-model-invocation`)
+The installer handles everything for each skill:
+
+- Copies `SKILL.md`, `references/`, and `scripts/` as-is (no frontmatter rewriting)
 - Reads the `description` field from each skill's own `SKILL.md`
-- Optionally syncs corrected `SKILL.md` files back to the project (`-SkipSync` to disable)
 
 Once installed, start a **new Claude Code session**:
 
@@ -282,14 +296,36 @@ The CLI works standalone. Any agent that can execute shell commands can use it:
 3. Instruct the agent to use `python3 deye_cli.py --json <command>` for structured output
 4. Optionally provide `SKILL.md` as context for the agent to understand the command catalog and safety protocol
 
+### Run from the repo (no install)
+
+Point any CLI harness at this repo's `skills/` folder. Scripts self-locate the
+shared core (`deye_core.py`) and your `.env`, so no install step is required:
+
+```bash
+python3 skills/deye-cloud-daily/scripts/deye_daily.py --date yesterday --output text
+```
+
+### Adding a new deye-* skill
+
+1. `cp -r skills/_template skills/deye-cloud-<x>`
+2. Edit `skills/deye-cloud-<x>/SKILL.md` (`name` + `description`) and write
+   `scripts/deye_<x>.py` (it already does `import _bootstrap; import deye_core`).
+3. Run `python install.py` (or just point a harness at the repo).
+
+`_bootstrap.py` comes from the template and is identical across skills. The
+installer auto-discovers the new folder; no installer changes needed.
+
 ---
 
 ## Project Structure
 
 ```
 deyecloud-cli/
-├── install-skill.ps1                    # Installs ALL skills from skills/ to ~/.claude/skills/
+├── install.py                           # Cross-platform installer (global/local/target/dry-run)
+├── install-skill.ps1                    # thin wrapper -> install.py
+├── install.sh                           # POSIX thin wrapper -> install.py
 ├── skills/
+│   ├── _template/                       # Scaffold for new deye-* skills
 │   ├── deye-cloud/
 │   │   ├── SKILL.md                    # AI agent instructions (CLI + MCP)
 │   │   ├── scripts/
