@@ -20,6 +20,21 @@ and solar savings calculations for Deye hybrid inverter systems.
 
 ---
 
+## Running scripts
+
+This skill ships Python scripts in its own `scripts/` folder. Invoke them with:
+
+- **Claude Code:** `python3 "${CLAUDE_SKILL_DIR}/scripts/<file>.py" ...`
+- **Other harnesses (Antigravity, Codex, Gemini, Copilot):** the skill directory
+  is the folder containing this `SKILL.md`. Run
+  `python3 <skill-dir>/scripts/<file>.py ...` — e.g. from the repo that is
+  `python3 skills/deye-cloud-monthly/scripts/<file>.py ...`.
+
+Scripts self-locate both the shared core and the `.env`, so there are no
+working-directory assumptions — you only need to run the correct `.py` file.
+
+---
+
 ## Workflow
 
 ### Step 1 — Parse the date / range
@@ -39,7 +54,7 @@ If no date given, default to `this month`.
 ### Step 2 — Run the analyzer
 
 ```bash
-python3 skills/deye-cloud-monthly/scripts/deye_monthly.py --date <DATE> --output text
+python3 "${CLAUDE_SKILL_DIR}/scripts/deye_monthly.py" --date <DATE> --output text
 ```
 
 Use `--output json` for scripting. The script auto-detects credentials via the same
@@ -92,7 +107,7 @@ Human-readable ASCII table with financial summary.
 ### JSON (for scripting)
 
 ```bash
-python3 deye_monthly.py --date 2026-04 --output json
+python3 "${CLAUDE_SKILL_DIR}/scripts/deye_monthly.py" --date 2026-04 --output json
 ```
 
 Returns:
@@ -129,7 +144,9 @@ Returns:
 
 ## Script Location
 
-- **Script**: `skills/deye-cloud-monthly/scripts/deye_monthly.py`
+- **Script**: Claude Code: `"${CLAUDE_SKILL_DIR}/scripts/deye_monthly.py"` — other harnesses: `skills/deye-cloud-monthly/scripts/deye_monthly.py`
 - **Reuses**: `deye-cloud/scripts/deye_core.py` (API calls, auth, session)
 - **Dependencies**: stdlib only (json, re, datetime, calendar, pathlib, argparse)
 - **Python**: 3.12+
+
+Locates `deye_core.py` via `_bootstrap.py` (`$DEYE_CORE_DIR` → sibling `deye-cloud/scripts/`).
